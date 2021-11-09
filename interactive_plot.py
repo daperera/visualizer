@@ -7,24 +7,14 @@ import winsound
 import cv2
 
 
-# interactive plot of a dataframe
-# the dataframe is supposed to have the following columns
-# df["x"]: x coordinate of points to draw
-# df["y"]: y coordinate of points to draw
-# df["im"]: images corresponding to points
-# df["audio"]: sound corresponding to points
-# df["label"]: label corresponding to points
-def plot(df, fig=None, ax=None):
 
-    if fig==None or ax==None:
-        fig, ax = plt.subplots()
-
+def plot(df, fig, ax):
     
-    label_list = df["label"].unique().tolist()
+    label_list = df["__label__"].unique().tolist()
     sc = ax.scatter(
-        df["x"],
-        df["y"],
-        c=list(map(lambda x: label_list.index(x), df["label"].tolist())),
+        df["__x__"],
+        df["__y__"],
+        c=list(map(lambda x: label_list.index(x), df["__label__"].tolist())),
         s=100,
         cmap=plt.cm.RdYlGn,
         norm=plt.Normalize(1, 4),
@@ -51,11 +41,12 @@ def plot(df, fig=None, ax=None):
         "ax": ax,
         "sc": sc,
         "im": im,
-        "im_scale":100,
+        "zoom":100,
         "range":max(ax.get_xlim()[1]-ax.get_xlim()[0], ax.get_ylim()[1]-ax.get_ylim()[0]),
         "ab": ab,
         "label": None,
-        "show_spec": True,
+        "key_list": list([key for key in df.keys() if key not in ["__x__", "__y__", "__audio__", "__label__", "filepath"]]),
+        "im_key": 0,
     }
     fig.canvas.mpl_connect("motion_notify_event", lambda event: _hover(state, event))
     fig.canvas.mpl_connect("button_press_event", lambda event: _click(state, event))
@@ -65,7 +56,7 @@ def plot(df, fig=None, ax=None):
 
 def _play_sound(state, label):
     winsound.PlaySound(
-        state["df"].iloc[label]["audio"], winsound.SND_ASYNC | winsound.SND_ALIAS
+        state["df"].iloc[label]["__audio__"], winsound.SND_ASYNC | winsound.SND_ALIAS
     )
 
 def _stop_sound():
@@ -73,16 +64,19 @@ def _stop_sound():
 
 
 def _update_im(state, label):
-    # show either spectrogram or saliency map
-    if not state["show_spec"] and state["df"].iloc[label]["gradient"] is not None:
-        im = state["df"].iloc[label]["gradient"] 
-    else:
-        im = state["df"].iloc[label]["spectrogram"] 
-    
-    im_resized = cv2.resize(im, dsize=(state["im_scale"]*2, state["im_scale"]), interpolation=cv2.INTER_CUBIC)
+    # get image from state and prepare it
+    print(state["im_key"])
+    print(state["key_list"])
+    im = state["df"].iloc[label][state["key_list"][state["im_key"]]]
+    im_resized = cv2.resize(im, dsize=(state["zoom"]*2, state["zoom"]), interpolation=cv2.INTER_CUBIC)
     im_normalized = cv2.normalize(im_resized, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+    
+    # update plot
     state["im"].set_data(im_normalized)
     state["fig"].canvas.draw_idle()
+
+    # update title
+    state["ax"].set_title(state["key_list"][state["im_key"]])
 
 def _show_image(state, event, label):
     # prepare plot
@@ -91,10 +85,7 @@ def _show_image(state, event, label):
     hs = (event.y > h / 2.0) * -1 + (event.y <= h / 2.0)
     state["ab"].xybox = (50.0 * ws, 50.0 * hs)
     state["ab"].set_visible(True)
-    state["ab"].xy = (state["df"].iloc[label]["x"], state["df"].iloc[label]["y"])
-
-    # update title
-    state["ax"].set_title(state["df"].iloc[label]["audio"])
+    state["ab"].xy = (state["df"].iloc[label]["__x__"], state["df"].iloc[label]["__y__"])
 
     # set the image corresponding to that point
     _update_im(state, label)
@@ -104,22 +95,21 @@ def _hide_image(state):
     state["fig"].canvas.draw_idle()
 
 def _save_point(state, label):
-    
-    # plot
-    if state["df"].iloc[label]["gradient"] is not None:
-        fig, ax = plt.subplots(nrows=2)
-        fig.suptitle(state["df"].iloc[label]["audio"])
-        ax[0].imshow(state["df"].iloc[label]["spectrogram"])
-        ax[1].plot(state["df"].iloc[label]["gradient"])
-    else:
+    n_keys = len(state["key_list"])
+    if n_keys == 1:
         fig, ax = plt.subplots()
         ax.set_title(state["df"].iloc[label]["audio"])
-        ax.imshow(state["df"].iloc[label]["spectrogram"])
+        ax.imshow(state["df"].iloc[label][state["key_list"][0]])
+    else:
+        fig, ax = plt.subplots(nrows=n_keys)
+        fig.suptitle(state["df"].iloc[label]["audio"])
+        for i, key in enumerate(state["key_list"]): 
+            ax[i].imshow(state["df"].iloc[label][key])
+            ax[i].title(key)
 
     # ask filepath and save to file
     filepath = asksaveasfilename(defaultextension=".jpg")
     fig.savefig(filepath,bbox_inches='tight')
-    #plt.close(fig)
 
 def _hover(state, event):
     if event.inaxes == state["ax"]:
@@ -147,7 +137,7 @@ def _click(state, event):
             if event.button is MouseButton.LEFT:
                 _play_sound(state, label)
             elif event.button is MouseButton.RIGHT:
-                state["show_spec"] = not state["show_spec"]
+                state["im_key"] = (state["im_key"] + 1) % len(state["key_list"])
                 _update_im(state, label)
             else:
                 _save_point(state, label)
@@ -161,9 +151,9 @@ def _scroll(state, event):
         # if a point is hovered : update image scale
         if cont:
             if event.button == "up":
-                state["im_scale"] = state["im_scale"] + 50
+                state["zoom"] = state["zoom"] + 50
             else:
-                state["im_scale"] = max(state["im_scale"] - 50, 50)
+                state["zoom"] = max(state["zoom"] - 50, 50)
             _update_im(state, ind["ind"][0])
         # else zoom in the graph and center at the position of the mouse
         else:
