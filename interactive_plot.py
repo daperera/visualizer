@@ -45,7 +45,7 @@ def plot(df, fig, ax):
         "range":max(ax.get_xlim()[1]-ax.get_xlim()[0], ax.get_ylim()[1]-ax.get_ylim()[0]),
         "ab": ab,
         "label": None,
-        "key_list": list([key for key in df.keys() if key not in ["__x__", "__y__", "__audio__", "__label__", "filepath"]]),
+        "key_list": list([key for key in df.keys() if key not in ["__x__", "__y__", "__label__", "filepath"]]),
         "im_key": 0,
     }
     fig.canvas.mpl_connect("motion_notify_event", lambda event: _hover(state, event))
@@ -56,7 +56,7 @@ def plot(df, fig, ax):
 
 def _play_sound(state, label):
     winsound.PlaySound(
-        state["df"].iloc[label]["__audio__"], winsound.SND_ASYNC | winsound.SND_ALIAS
+        state["df"].iloc[label]["filepath"], winsound.SND_ASYNC | winsound.SND_ALIAS
     )
 
 def _stop_sound():
@@ -65,8 +65,6 @@ def _stop_sound():
 
 def _update_im(state, label):
     # get image from state and prepare it
-    print(state["im_key"])
-    print(state["key_list"])
     im = state["df"].iloc[label][state["key_list"][state["im_key"]]]
     im_resized = cv2.resize(im, dsize=(state["zoom"]*2, state["zoom"]), interpolation=cv2.INTER_CUBIC)
     im_normalized = cv2.normalize(im_resized, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)

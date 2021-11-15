@@ -7,7 +7,8 @@ from tkinter import *
 import numpy as np
 
 from . import interactive_plot
-from .utils import *
+from .utils2 import *
+from .config2 import label_color
 
 class Visualizer:
 
@@ -77,9 +78,10 @@ class Visualizer:
                 fgrid, 
                 text=self.options[i][:15], 
                 height=1,
-                width=15
+                width=15,
+                foreground=label_color[i]
             ).grid(row=i+1, column=0)
-            Label(fgrid, text=self.options[i][0], height=1, width=3).grid(row=0, column=i+1)
+            Label(fgrid, text=self.options[i][0], height=1, width=3, foreground=label_color[i]).grid(row=0, column=i+1)
 
         # building confusion matrix grid
         cm = [[len(self.cdf[self.options[i]][self.options[j]]) for j in range(n_option)] for i in range(n_option)]

@@ -1,0 +1,1 @@
+label_color = ["black", "blue", "green", "red", "orange", "purple", "brown", "pink", "cyan", "olive", "gray"]
